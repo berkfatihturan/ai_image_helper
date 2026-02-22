@@ -200,19 +200,30 @@ def draw_ui_map(grouped_ui, output_path):
     img.save(output_path)
 
 def main():
-    out_dir = sys.argv[1] if len(sys.argv) > 1 else "."
-    all_elements, visible_elements = extract_windows_ui()
-    
-    if visible_elements:
-        draw_ui_map(visible_elements, os.path.join(out_dir, "ui_map_visual.png"))
-    
-    json_all = json.dumps(all_elements, ensure_ascii=False, indent=2)
-    json_visible = json.dumps(visible_elements, ensure_ascii=False, indent=2)
-    
-    with open(os.path.join(out_dir, "ui_output_all.json"), "w", encoding="utf-8") as f:
-        f.write(json_all)
-    with open(os.path.join(out_dir, "ui_output_visible.json"), "w", encoding="utf-8") as f:
-        f.write(json_visible)
+    import traceback
+    out_dir = sys.argv[1] if len(sys.argv) > 1 else "C:\\Temp"
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+        
+    try:
+        all_elements, visible_elements = extract_windows_ui()
+        
+        if visible_elements:
+            draw_ui_map(visible_elements, os.path.join(out_dir, "ui_map_visual.png"))
+        
+        json_all = json.dumps(all_elements, ensure_ascii=False, indent=2)
+        json_visible = json.dumps(visible_elements, ensure_ascii=False, indent=2)
+        
+        with open(os.path.join(out_dir, "ui_output_all.json"), "w", encoding="utf-8") as f:
+            f.write(json_all)
+        with open(os.path.join(out_dir, "ui_output_visible.json"), "w", encoding="utf-8") as f:
+            f.write(json_visible)
+            
+        with open(os.path.join(out_dir, "psexec_success.log"), "w", encoding="utf-8") as f:
+            f.write("OK")
+    except Exception as e:
+        with open(os.path.join(out_dir, "psexec_error.log"), "w", encoding="utf-8") as f:
+            f.write(traceback.format_exc())
 
 if __name__ == "__main__":
     main()

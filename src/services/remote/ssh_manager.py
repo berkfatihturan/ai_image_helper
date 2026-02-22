@@ -79,6 +79,7 @@ class RemoteExtractor:
             json_all_remote = f"{temp_dir}\\ui_output_all.json"
             json_vis_remote = f"{temp_dir}\\ui_output_visible.json"
             img_remote = f"{temp_dir}\\ui_map_visual.png"
+            err_log_remote = f"{temp_dir}\\psexec_error.log"
             
             import json
             
@@ -93,7 +94,19 @@ class RemoteExtractor:
                 # Resmi API sunucusuna indirelim
                 sftp.get(img_remote, "remote_map.png")
             except FileNotFoundError:
-                 return {"status": "error", "message": "Gorsel sonuc doyalari okunamadi. PsExec tamamlanamamis olabilir."}
+                 # Eger dosyalar yoksa, muhtemelen python scripti iceride patladi. Logu okumaya calis.
+                 error_details = "Bilinmeyen Hata"
+                 try:
+                     with sftp.file(err_log_remote, "r") as f:
+                         error_details = f.read().decode('utf-8')
+                     sftp.remove(err_log_remote)
+                 except:
+                     pass
+                     
+                 return {
+                     "status": "error", 
+                     "message": f"Gorsel sonuc doyalari okunamadi. PsExec veya Python tamamlanamadi.\nHata Detayi:\n{error_details}"
+                 }
 
             # İzi kaybettirme (Gizlilik Cleanup)
             sftp.remove(payload_remote_path)
