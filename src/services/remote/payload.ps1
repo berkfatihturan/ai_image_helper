@@ -79,9 +79,7 @@ try {
         public static List<IntPtr> GetAllTopLevelWindows() {
             List<IntPtr> windows = new List<IntPtr>();
             EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
-                if (IsWindowVisible(hWnd)) {
-                    windows.Add(hWnd);
-                }
+                windows.Add(hWnd);
                 return true;
             }, IntPtr.Zero);
             return windows;
