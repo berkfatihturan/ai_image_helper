@@ -64,10 +64,21 @@ class RemoteExtractor:
             session_id = self.get_active_session_id()
             print(f"[{self.host}] Hedef Desktop Session ID: {session_id}")
             
+            # Python'un hedeftesi mutlak (absolute) yolunu bulalim
+            # Sadece 'python' yazarsak, psexec SYSTEM (-s) session'inda PATH'i bulamayip cokuyor
+            stdin, stdout, stderr = self.ssh.exec_command("where python")
+            python_paths = stdout.read().decode('utf-8').strip().split('\n')
+            
+            if not python_paths or 'Could not find' in python_paths[0] or python_paths[0].strip() == '':
+                 return {"status": "error", "message": "Hedef makinede 'python' kurulu degil veya PATH'e eklenmemis."}
+                 
+            # Eger birden fazla varsa ilkini (en gecerli olani) secelim
+            python_exe = python_paths[0].strip()
+            print(f"[{self.host}] Bulunan Python Yolu: {python_exe}")
+            
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
             # Not: C:\PSTools dizininin Path'te olmama ihtimaline karsi komut icinde gecici olarak Path'e ekliyoruz.
-            # Alternatif olarak python kurulusu oldugu varsayilmaktadir.
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula cmd.exe /c python {payload_remote_path} {temp_dir}"'
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula \"{python_exe}\" {payload_remote_path} {temp_dir}"'
             print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
