@@ -121,12 +121,12 @@ try {
     $allElementsOutput = @()
     $currentZIndex = 0
 
+    # Sadece isimsiz olsa bile JSON'a girmeyi hak eden GERCEK interaktif ve icerik tipleri.
+    # Pane, Group, Window gibi tasiyici/yapisal klasorler isimsizse cildirmamak icin sildik.
     $meaningfulTypes = @(
         "Button", "Edit", "Hyperlink", "MenuItem", "Text", "CheckBox",
-        "ComboBox", "ListItem", "TabItem", "Document", "Image", "Pane",
-        "TreeItem", "DataItem", "Custom", "Group", "SplitButton", 
-        "StatusBar", "Tab", "Table", "TitleBar", "Window", "ToolBar",
-        "MenuBar", "Menu", "List", "Thumb", "Separator"
+        "ComboBox", "ListItem", "TabItem", "Document", "Image",
+        "TreeItem", "DataItem", "SplitButton", "Thumb"
     )
 
     foreach ($window in $topLevelWindows) {
@@ -153,7 +153,7 @@ try {
             }
             
             # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
             
             # C# tarzi queue implementasyonu kullanarak BFS
             $queue = New-Object System.Collections.Queue
