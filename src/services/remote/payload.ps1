@@ -63,10 +63,8 @@ try {
 
     foreach ($window in $topLevelWindows) {
         try {
-            if ($window.Current.IsOffscreen) { continue }
-            
             $wRect = Get-BoundingRect $window
-            if ($wRect -eq $null) { continue }
+            if ($wRect -eq $null -or $wRect.genislik -le 0 -or $wRect.yukseklik -le 0) { continue }
             
             $parentName = if ([string]::IsNullOrWhiteSpace($window.Current.Name)) { "Bilinmeyen Pencere" } else { $window.Current.Name }
             $color = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
