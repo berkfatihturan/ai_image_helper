@@ -46,12 +46,9 @@ try {
         return "Unknown"
     }
 
-    # Sadece girmemiz gereken temel pencereleri (Desktop altindakileri) alalim
-    # NOT: Gorev Cubugu (Taskbar) ve Masaustu (Desktop) birer "Window" degil, "Pane" olarak gecer. Ikisini de alalim.
-    $windowCondition = New-Object System.Windows.Automation.OrCondition(
-        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)),
-        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Pane))
-    )
+    # Masaustu (Desktop) ve Gorev Cubugu (Taskbar) gibi ozel sistem pencerelerini kacirmamak icin
+    # Root element'in altindaki "TUM" (TrueCondition) elementleri top-level pencere kabul ediyoruz.
+    $windowCondition = [System.Windows.Automation.Condition]::TrueCondition
     $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
 
     $allElementsOutput = @()
