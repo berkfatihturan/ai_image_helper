@@ -129,6 +129,7 @@ try {
                 } catch {}
             }
             
+            $windowGroup.elmanlar = $windowGroup.elmanlar.ToArray()
             $allElementsOutput += $windowGroup
             $currentZIndex++
         } catch {
