@@ -70,6 +70,8 @@ class RemoteExtractor:
             print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
             self.ssh.exec_command(psexec_cmd)
+            # Standart stderr ve stdout'u (PsExec'in terminal çıktısını) kayıt edelim ki patlarsa okuyabilelim
+            stdin_exec, stdout_exec, stderr_exec = self.ssh.exec_command(psexec_cmd)
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
             # Normal sartlarda bu 2-4 saniye surer.
@@ -92,7 +94,7 @@ class RemoteExtractor:
                     
             except FileNotFoundError:
                  # Eger dosyalar yoksa, muhtemelen python scripti iceride patladi. Logu okumaya calis.
-                 error_details = "Bilinmeyen Hata"
+                 error_details = "Python Hata Logu Yok."
                  try:
                      with sftp.file(err_log_remote, "r") as f:
                          error_details = f.read().decode('utf-8')
@@ -100,9 +102,13 @@ class RemoteExtractor:
                  except:
                      pass
                      
+                 # Eger Python hata logu yoksa sorun muhtemelen direkt PsExec asamasindadir. SSH stderr'i cekelim
+                 ssh_error = stderr_exec.read().decode('utf-8', errors='ignore').strip()
+                 ssh_output = stdout_exec.read().decode('utf-8', errors='ignore').strip()
+                 
                  return {
                      "status": "error", 
-                     "message": f"Gorsel sonuc doyalari okunamadi. PsExec veya Python tamamlanamadi.\nHata Detayi:\n{error_details}"
+                     "message": f"Gorsel sonuc doyalari okunamadi.\n\n[Python Logu]:\n{error_details}\n\n[PsExec Terminal Çıktısı - STDERR]:\n{ssh_error}\n\n[STDOUT]:\n{ssh_output}"
                  }
 
             # İzi kaybettirme (Gizlilik Cleanup)
