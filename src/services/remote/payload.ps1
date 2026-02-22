@@ -47,9 +47,10 @@ try {
     }
 
     # Sadece girmemiz gereken temel pencereleri (Desktop altindakileri) alalim
-    $windowCondition = New-Object System.Windows.Automation.PropertyCondition(
-        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, 
-        [System.Windows.Automation.ControlType]::Window
+    # NOT: Gorev Cubugu (Taskbar) ve Masaustu (Desktop) birer "Window" degil, "Pane" olarak gecer. Ikisini de alalim.
+    $windowCondition = New-Object System.Windows.Automation.OrCondition(
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)),
+        (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Pane))
     )
     $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
 
