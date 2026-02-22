@@ -78,7 +78,6 @@ class RemoteExtractor:
             # Sonuclari topla (SFTP ile Local'e Geri Al)
             json_all_remote = f"{temp_dir}\\ui_output_all.json"
             json_vis_remote = f"{temp_dir}\\ui_output_visible.json"
-            img_remote = f"{temp_dir}\\ui_map_visual.png"
             err_log_remote = f"{temp_dir}\\psexec_error.log"
             
             import json
@@ -91,8 +90,6 @@ class RemoteExtractor:
                 with sftp.file(json_all_remote, "r") as f:
                     all_data = json.load(f)
                     
-                # Resmi API sunucusuna indirelim
-                sftp.get(img_remote, "remote_map.png")
             except FileNotFoundError:
                  # Eger dosyalar yoksa, muhtemelen python scripti iceride patladi. Logu okumaya calis.
                  error_details = "Bilinmeyen Hata"
@@ -110,9 +107,13 @@ class RemoteExtractor:
 
             # İzi kaybettirme (Gizlilik Cleanup)
             sftp.remove(payload_remote_path)
-            sftp.remove(json_all_remote)
-            sftp.remove(json_vis_remote)
-            sftp.remove(img_remote)
+            try:
+                sftp.remove(json_all_remote)
+                sftp.remove(json_vis_remote)
+                # Resim dosyası yaratılmışsa sil (opsiyonel)
+                sftp.remove(f"{temp_dir}\\ui_map_visual.png")
+            except:
+                pass
             
             sftp.close()
             self.ssh.close()
