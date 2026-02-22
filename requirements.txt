@@ -4,3 +4,4 @@ uiautomation
 Pillow
 pydantic
 pydantic-settings
+paramiko

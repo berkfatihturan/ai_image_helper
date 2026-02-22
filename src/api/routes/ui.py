@@ -6,7 +6,8 @@ import json
 from src.core.config import settings
 from src.services.extractor import extract_windows_ui, get_os_type
 from src.services.visualizer import draw_ui_map
-from src.models.schemas import ExtractionResponse
+from src.services.remote.ssh_manager import RemoteExtractor
+from src.models.schemas import ExtractionResponse, RemoteCredentials
 
 router = APIRouter()
 
@@ -46,6 +47,40 @@ def extract_ui_elements():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"API Hatası (Extraction): {str(e)}")
+
+@router.post("/extract/remote", response_model=ExtractionResponse)
+def extract_remote_ui_elements(creds: RemoteCredentials):
+    """
+    Hedef Windows makinesine 'Agentless' (Ajansız) olarak SSH üzerinden baglanip 
+    PsExec kullanarak ana masaustu ekranini taratir ve JSON ile Gorsel sonuclari ceker.
+    """
+    try:
+        remote = RemoteExtractor(creds.host, creds.username, creds.password, creds.port)
+        data = remote.execute_remote_extraction()
+        
+        if data.get("status") == "error":
+             raise HTTPException(status_code=500, detail=data.get("message"))
+             
+        # Gelen PNG dosyasini sunucunun kendi gosterim path'ine copy/rename yapalim ki /map goruntulesin
+        if os.path.exists("remote_map.png"):
+             os.replace("remote_map.png", settings.MAP_OUTPUT_FILE)
+             
+        # Yerel dosyalari API uyumlulugu icin yedekle
+        with open(settings.JSON_ALL_FILE, "w", encoding="utf-8") as f:
+             json.dump(data["all_elements"], f, ensure_ascii=False, indent=2)
+        with open(settings.JSON_VISIBLE_FILE, "w", encoding="utf-8") as f:
+             json.dump(data["visible_elements"], f, ensure_ascii=False, indent=2)
+
+        return dict(
+            status="success",
+            message=f"{creds.host} IP'li uc cihazin ekrani basariyla tarandi (Remote/Agentless).",
+            data=dict(
+                visible_elements=data["visible_elements"],
+                all_elements=data["all_elements"]
+            )
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/map")
 def get_visual_map():
