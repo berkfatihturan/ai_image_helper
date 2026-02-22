@@ -83,8 +83,10 @@ class RemoteExtractor:
             
             # Sadece "ALL" (Tum pencere agaci) datasini oku
             try:
-                with sftp.file(json_all_remote, "r") as f:
-                    all_data = json.load(f)
+                with sftp.file(json_all_remote, "rb") as f:
+                    raw_bytes = f.read()
+                    json_str = raw_bytes.decode('utf-8-sig') # Windows BOM karakterini temizler
+                    all_data = json.loads(json_str)
             except FileNotFoundError:
                  return {
                      "status": "error", 
