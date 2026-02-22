@@ -51,38 +51,70 @@ try {
     $windowCondition = [System.Windows.Automation.Condition]::TrueCondition
     $topLevelWindowsCollection = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
     
-    # UIAutomation her zaman gizli shell komponentlerini gostermeyebiliyor. 
-    # Win32 API pencerelerini zorla arayalim ve listeye manuel ekleyelim.
+    # UIAutomation (RootElement.FindAll) uzak PsExec oturumlarinda Taskbar/Desktop gibi
+    # temel Shell bilesenlerini filtreleyip GIZLEYEBILIR. 
+    # Mukkemmel bir bypass icin Win32 API EnumWindows ile donanımsal tum elementleri toplayacagiz.
     $signature = @'
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern IntPtr FindWindow(string strClassName, string strWindowName);
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Collections.Generic;
+
+    public class Win32Helper {
+        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        public static extern int GetWindowTextLength(IntPtr hWnd);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+
+        public static List<IntPtr> GetAllTopLevelWindows() {
+            List<IntPtr> windows = new List<IntPtr>();
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
+                if (IsWindowVisible(hWnd)) {
+                    windows.Add(hWnd);
+                }
+                return true;
+            }, IntPtr.Zero);
+            return windows;
+        }
+    }
 '@
-    Add-Type -MemberDefinition $signature -Name "Win32FindWindow" -Namespace Win32Functions -PassThru | Out-Null
+    Add-Type -TypeDefinition $signature -ReferencedAssemblies "System.Collections" | Out-Null
     
     $topLevelWindows = New-Object System.Collections.ArrayList
     
-    # Gorev Cubugu (Taskbar) EN USTTE OLMALI (Z-Index = 0)
-    $taskbarHandle = [Win32Functions.Win32FindWindow]::FindWindow("Shell_TrayWnd", $null)
-    if ($taskbarHandle -ne [IntPtr]::Zero) {
-        try {
-            $taskbarElement = [System.Windows.Automation.AutomationElement]::FromHandle($taskbarHandle)
-            if ($taskbarElement -ne $null) { [void]$topLevelWindows.Add($taskbarElement) }
-        } catch {}
-    }
-    
+    # 1. STANDART YONTEM: UIAutomation Agaci (Guvenli olanlari alir)
     foreach ($win in $topLevelWindowsCollection) {
-        # Zaten ekledigimiz ozel pencereleri tekrar eklememek icin
-        $wClass = $win.Current.ClassName
-        if ($wClass -eq "Shell_TrayWnd" -or $wClass -eq "Progman" -or $wClass -eq "WorkerW") { continue }
         [void]$topLevelWindows.Add($win)
     }
     
-    # Masaustu Root HWND (Progman) EN ALTTA OLMALI (Z-Index = Son)
-    $desktopHandle = [Win32Functions.Win32FindWindow]::FindWindow("Progman", $null)
-    if ($desktopHandle -ne [IntPtr]::Zero) {
+    # 2. HACK YONTEMI: Win32 HWND Agaci (Gizlenenleri/Taskbar/Desktop zorla alir)
+    $allHwnds = [Win32Helper]::GetAllTopLevelWindows()
+    foreach ($hwnd in $allHwnds) {
         try {
-            $desktopElement = [System.Windows.Automation.AutomationElement]::FromHandle($desktopHandle)
-            if ($desktopElement -ne $null) { [void]$topLevelWindows.Add($desktopElement) }
+            $el = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
+            if ($el -ne $null) {
+                # UIAutomation zaten bulmussa (Duplicate) gormezden gel
+                $isDuplicate = $false
+                foreach ($existing in $topLevelWindows) {
+                    if ($existing.Current.NativeWindowHandle -eq $el.Current.NativeWindowHandle) {
+                        $isDuplicate = $true
+                        break
+                    }
+                }
+                if (-not $isDuplicate) {
+                    [void]$topLevelWindows.Add($el)
+                }
+            }
         } catch {}
     }
 
@@ -120,16 +152,27 @@ try {
                 elmanlar = [System.Collections.ArrayList]::new()
             }
             
-            # Elementleri toplamak icin native FindAll kullaniyoruz (Asiri hizli ve stabil)
-            $controlCondition = [System.Windows.Automation.Condition]::TrueCondition
-            $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $controlCondition)
+            # Elementleri toplamak icin agaci gezelim
+            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
             
+            # C# tarzi queue implementasyonu kullanarak BFS
+            $queue = New-Object System.Collections.Queue
+            $queue.Enqueue($window)
             $elementCount = 0
-            $allNodes = @($window)
-            if ($elements -ne $null) { foreach ($e in $elements) { $allNodes += $e } }
             
-            foreach ($node in $allNodes) {
-                if ($elementCount -ge 4000) { break }
+            while ($queue.Count -gt 0 -and $elementCount -lt 4000) {
+                $node = $queue.Dequeue()
+                
+                # Cocuklari siraya ekle
+                try {
+                    $child = $treeWalker.GetFirstChild($node)
+                    while ($child -ne $null) {
+                        $queue.Enqueue($child)
+                        $child = $treeWalker.GetNextSibling($child)
+                    }
+                } catch {}
+                
+                # Su anki dugumu isleyelim
                 try {
                     $cRect = Get-BoundingRect $node
                     if ($cRect -eq $null -or $cRect.genislik -le 0 -or $cRect.yukseklik -le 0) { continue }
