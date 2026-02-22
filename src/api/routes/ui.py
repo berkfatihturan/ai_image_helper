@@ -40,7 +40,10 @@ def extract_ui_elements():
         return dict(
             status="success",
             message="Windows ekran UI elementleri başarıyla tarandı.",
-            data=visible_elements
+            data=dict(
+                visible_elements=visible_elements,
+                all_elements=all_elements
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"API Hatası (Extraction): {str(e)}")
@@ -71,7 +74,10 @@ def extract_remote_ui_elements(creds: RemoteCredentials):
         return dict(
             status="success",
             message=f"{creds.host} IP'li uc cihazin ekrani basariyla tarandi (Remote/Agentless).",
-            data=data["visible_elements"]
+            data=dict(
+                visible_elements=data["visible_elements"],
+                all_elements=data["all_elements"]
+            )
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
