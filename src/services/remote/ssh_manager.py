@@ -68,13 +68,19 @@ class RemoteExtractor:
             # Not: C:\PSTools dizininin Path'te olmama ihtimaline karsi komut icinde gecici olarak Path'e ekliyoruz.
             # Alternatif olarak python kurulusu oldugu varsayilmaktadir.
             psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula python {payload_remote_path} {temp_dir}"'
-            print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
+            print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor: {psexec_cmd}")
             
-            self.ssh.exec_command(psexec_cmd)
+            stdin, stdout, stderr = self.ssh.exec_command(psexec_cmd)
             
-            # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
-            # Normal sartlarda bu 2-4 saniye surer.
-            time.sleep(6) 
+            # Baglantinin Psexec terminal ciktilarini (stderr dahil, cunku psexec genelde diag ciktilarini stderr'e basar) yakalayalim
+            p_stdout = stdout.read().decode('utf-8', errors='ignore')
+            p_stderr = stderr.read().decode('utf-8', errors='ignore')
+            
+            print(f"[{self.host}] PsExec STDOUT: {p_stdout}")
+            print(f"[{self.host}] PsExec STDERR: {p_stderr}")
+            
+            # Asenkron bitmesini bekleyelim (Senkron yapmadigimiz icin)
+            time.sleep(5) 
             
             # Sonuclari topla (SFTP ile Local'e Geri Al)
             json_all_remote = f"{temp_dir}\\ui_output_all.json"
