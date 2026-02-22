@@ -49,7 +49,38 @@ try {
     # Masaustu (Desktop) ve Gorev Cubugu (Taskbar) gibi ozel sistem pencerelerini kacirmamak icin
     # Root element'in altindaki "TUM" (TrueCondition) elementleri top-level pencere kabul ediyoruz.
     $windowCondition = [System.Windows.Automation.Condition]::TrueCondition
-    $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
+    $topLevelWindowsCollection = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
+    
+    # UIAutomation her zaman gizli shell komponentlerini gostermeyebiliyor. 
+    # Win32 API pencerelerini zorla arayalim ve listeye manuel ekleyelim.
+    $signature = @'
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    public static extern IntPtr FindWindow(string strClassName, string strWindowName);
+'@
+    Add-Type -MemberDefinition $signature -Name "Win32FindWindow" -Namespace Win32Functions -PassThru | Out-Null
+    
+    $topLevelWindows = New-Object System.Collections.ArrayList
+    foreach ($win in $topLevelWindowsCollection) {
+        [void]$topLevelWindows.Add($win)
+    }
+    
+    # Gorev Cubugu HWND (C:\Windows\explorer.exe Shell_TrayWnd Class)
+    $taskbarHandle = [Win32Functions.Win32FindWindow]::FindWindow("Shell_TrayWnd", $null)
+    if ($taskbarHandle -ne [IntPtr]::Zero) {
+        try {
+            $taskbarElement = [System.Windows.Automation.AutomationElement]::FromHandle($taskbarHandle)
+            if ($taskbarElement -ne $null) { [void]$topLevelWindows.Add($taskbarElement) }
+        } catch {}
+    }
+    
+    # Masaustu Root HWND (Progman)
+    $desktopHandle = [Win32Functions.Win32FindWindow]::FindWindow("Progman", $null)
+    if ($desktopHandle -ne [IntPtr]::Zero) {
+        try {
+            $desktopElement = [System.Windows.Automation.AutomationElement]::FromHandle($desktopHandle)
+            if ($desktopElement -ne $null) { [void]$topLevelWindows.Add($desktopElement) }
+        } catch {}
+    }
 
     $allElementsOutput = @()
     $currentZIndex = 0
