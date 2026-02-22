@@ -10,6 +10,10 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Web.Extensions # JSON Serializer icin (eski sistemler dahil)
 
+# -WindowStyle Hidden komutuyla baslasa bile pencerenin ekrandan tamamen
+# kaybolmasina (flush) firsat vermek icin minik bir gecikme ekliyoruz
+Start-Sleep -Milliseconds 200
+
 try {
     $rootElement = [System.Windows.Automation.AutomationElement]::RootElement
 
