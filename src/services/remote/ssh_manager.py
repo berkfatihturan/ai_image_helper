@@ -68,19 +68,17 @@ class RemoteExtractor:
             # Not: C:\PSTools dizininin Path'te olmama ihtimaline karsi komut icinde gecici olarak Path'e ekliyoruz.
             # Alternatif olarak python kurulusu oldugu varsayilmaktadir.
             psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula python {payload_remote_path} {temp_dir}"'
-            print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor: {psexec_cmd}")
+            print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
-            stdin, stdout, stderr = self.ssh.exec_command(psexec_cmd)
+            # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
+            # Normal sartlarda bu 2-4 saniye surer. Ekrani kilitliyse psexec asili kalabilir, timeout koyalim.
+            stdin, stdout, stderr = self.ssh.exec_command(psexec_cmd, timeout=15)
             
-            # Baglantinin Psexec terminal ciktilarini (stderr dahil, cunku psexec genelde diag ciktilarini stderr'e basar) yakalayalim
-            p_stdout = stdout.read().decode('utf-8', errors='ignore')
-            p_stderr = stderr.read().decode('utf-8', errors='ignore')
+            # Psexec ciktilarini yakala (Hata ayiklama icin cok kritik)
+            psexec_out = stdout.read().decode('utf-8', errors='ignore')
+            psexec_err = stderr.read().decode('utf-8', errors='ignore')
             
-            print(f"[{self.host}] PsExec STDOUT: {p_stdout}")
-            print(f"[{self.host}] PsExec STDERR: {p_stderr}")
-            
-            # Asenkron bitmesini bekleyelim (Senkron yapmadigimiz icin)
-            time.sleep(5) 
+            print(f"[{self.host}] PsExec Calistirma Tamamlandi.")
             
             # Sonuclari topla (SFTP ile Local'e Geri Al)
             json_all_remote = f"{temp_dir}\\ui_output_all.json"
@@ -102,17 +100,18 @@ class RemoteExtractor:
                 sftp.get(img_remote, "remote_map.png")
             except FileNotFoundError:
                  # Eger dosyalar yoksa, muhtemelen python scripti iceride patladi. Logu okumaya calis.
-                 error_details = "Bilinmeyen Hata"
+                 error_details = "Python Log Bulunamadi."
                  try:
                      with sftp.file(err_log_remote, "r") as f:
-                         error_details = f.read().decode('utf-8')
+                         error_details = f.read().decode('utf-8', errors='ignore')
                      sftp.remove(err_log_remote)
                  except:
                      pass
                      
+                 # Python logu yoksa asil sorun PsExec seviyesindedir
                  return {
                      "status": "error", 
-                     "message": f"Gorsel sonuc doyalari okunamadi. PsExec veya Python tamamlanamadi.\nHata Detayi:\n{error_details}"
+                     "message": f"Gorseller uretilemedi. PsExec veya Python coktu.\n\n--- PSEXEC STDERR ---\n{psexec_err}\n\n--- PYTHON LOG ---\n{error_details}"
                  }
 
             # İzi kaybettirme (Gizlilik Cleanup)
