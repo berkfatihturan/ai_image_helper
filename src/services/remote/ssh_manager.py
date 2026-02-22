@@ -87,6 +87,11 @@ class RemoteExtractor:
                     raw_bytes = f.read()
                     json_str = raw_bytes.decode('utf-8-sig') # Windows BOM karakterini temizler
                     all_data = json.loads(json_str)
+                    
+                    # PowerShell ConvertTo-Json eger array icinde tek bir pencere bulursa onu Dict olarak cevirir.
+                    # Pydantic (FastAPI) List bekledigi icin onu listeye zorlayalim.
+                    if isinstance(all_data, dict):
+                        all_data = [all_data]
             except (FileNotFoundError, json.JSONDecodeError) as parse_error:
                  # Eger JSON okunamiyorsa, PowerShell icinde bir exception patlamis ve psexec_error.log yazilmistir
                  err_log_remote = f"{temp_dir}\\psexec_error.log"
