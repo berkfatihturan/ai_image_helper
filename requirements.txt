@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+uiautomation
+Pillow
+pydantic
+pydantic-settings
