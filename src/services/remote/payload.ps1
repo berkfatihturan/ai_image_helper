@@ -89,7 +89,8 @@ try {
         "Button", "Edit", "Hyperlink", "MenuItem", "Text", "CheckBox",
         "ComboBox", "ListItem", "TabItem", "Document", "Image", "Pane",
         "TreeItem", "DataItem", "Custom", "Group", "SplitButton", 
-        "StatusBar", "Tab", "Table", "TitleBar", "Window"
+        "StatusBar", "Tab", "Table", "TitleBar", "Window", "ToolBar",
+        "MenuBar", "Menu", "List", "Thumb", "Separator"
     )
 
     foreach ($window in $topLevelWindows) {
@@ -97,7 +98,13 @@ try {
             $wRect = Get-BoundingRect $window
             if ($wRect -eq $null -or $wRect.genislik -le 0 -or $wRect.yukseklik -le 0) { continue }
             
-            $parentName = if ([string]::IsNullOrWhiteSpace($window.Current.Name)) { "Bilinmeyen Pencere" } else { $window.Current.Name }
+            $wName = $window.Current.Name
+            $wClass = $window.Current.ClassName
+            $parentName = if ([string]::IsNullOrWhiteSpace($wName)) { 
+                if ($wClass -eq "Shell_TrayWnd") { "Windows Taskbar ($wClass)" }
+                elseif ($wClass -eq "Progman" -or $wClass -eq "WorkerW") { "Windows Desktop ($wClass)" }
+                else { "Bilinmeyen Pencere ($wClass)" }
+            } else { $wName }
             $color = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
             $pBorder = @($wRect.x, $wRect.y, ($wRect.x + $wRect.genislik), ($wRect.y + $wRect.yukseklik))
             
@@ -110,7 +117,7 @@ try {
             }
             
             # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
             
             # C# tarzi queue implementasyonu kullanarak BFS
             $queue = New-Object System.Collections.Queue
