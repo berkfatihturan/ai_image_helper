@@ -24,14 +24,10 @@ class WindowGroup(BaseModel):
     kutu: List[int]  # [x1, y1, x2, y2]
     elmanlar: List[UIElement]
 
-class ExtractionResponseData(BaseModel):
-    visible_elements: List[WindowGroup]
-    all_elements: List[WindowGroup]
-
 class ExtractionResponse(BaseModel):
     status: str
     message: str
-    data: ExtractionResponseData
+    data: List[WindowGroup]
 
 class RemoteCredentials(BaseModel):
     host: str

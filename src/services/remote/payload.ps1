@@ -46,99 +46,31 @@ try {
         return "Unknown"
     }
 
-    # Masaustu (Desktop) ve Gorev Cubugu (Taskbar) gibi ozel sistem pencerelerini kacirmamak icin
-    # Root element'in altindaki "TUM" (TrueCondition) elementleri top-level pencere kabul ediyoruz.
-    $windowCondition = [System.Windows.Automation.Condition]::TrueCondition
-    $topLevelWindowsCollection = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
-    
-    # UIAutomation (RootElement.FindAll) uzak PsExec oturumlarinda Taskbar/Desktop gibi
-    # temel Shell bilesenlerini filtreleyip GIZLEYEBILIR. 
-    # Mukkemmel bir bypass icin Win32 API EnumWindows ile donanımsal tum elementleri toplayacagiz.
-    $signature = @'
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Collections.Generic;
-
-    public class Win32Helper {
-        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        public static extern int GetWindowTextLength(IntPtr hWnd);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        public static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool IsWindowVisible(IntPtr hWnd);
-
-        public static List<IntPtr> GetAllTopLevelWindows() {
-            List<IntPtr> windows = new List<IntPtr>();
-            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam) {
-                windows.Add(hWnd);
-                return true;
-            }, IntPtr.Zero);
-            return windows;
-        }
-    }
-'@
-    Add-Type -TypeDefinition $signature -ReferencedAssemblies "System.Collections" | Out-Null
-    
-    $topLevelWindows = New-Object System.Collections.ArrayList
-    
-    # 1. STANDART YONTEM: UIAutomation Agaci (Guvenli olanlari alir)
-    foreach ($win in $topLevelWindowsCollection) {
-        [void]$topLevelWindows.Add($win)
-    }
-    
-    # 2. HACK YONTEMI: Win32 HWND Agaci (Gizlenenleri/Taskbar/Desktop zorla alir)
-    $allHwnds = [Win32Helper]::GetAllTopLevelWindows()
-    foreach ($hwnd in $allHwnds) {
-        try {
-            $el = [System.Windows.Automation.AutomationElement]::FromHandle($hwnd)
-            if ($el -ne $null) {
-                # UIAutomation zaten bulmussa (Duplicate) gormezden gel
-                $isDuplicate = $false
-                foreach ($existing in $topLevelWindows) {
-                    if ($existing.Current.NativeWindowHandle -eq $el.Current.NativeWindowHandle) {
-                        $isDuplicate = $true
-                        break
-                    }
-                }
-                if (-not $isDuplicate) {
-                    [void]$topLevelWindows.Add($el)
-                }
-            }
-        } catch {}
-    }
+    # Sadece girmemiz gereken temel pencereleri (Desktop altindakileri) alalim
+    $windowCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty, 
+        [System.Windows.Automation.ControlType]::Window
+    )
+    $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
 
     $allElementsOutput = @()
     $currentZIndex = 0
 
-    # Sadece isimsiz olsa bile JSON'a girmeyi hak eden GERCEK interaktif ve icerik tipleri.
-    # Pane, Group, Window gibi tasiyici/yapisal klasorler isimsizse cildirmamak icin sildik.
     $meaningfulTypes = @(
         "Button", "Edit", "Hyperlink", "MenuItem", "Text", "CheckBox",
-        "ComboBox", "ListItem", "TabItem", "Document", "Image",
-        "TreeItem", "DataItem", "SplitButton", "Thumb"
+        "ComboBox", "ListItem", "TabItem", "Document", "Image", "Pane",
+        "TreeItem", "DataItem", "Custom", "Group", "SplitButton", 
+        "StatusBar", "Tab", "Table", "TitleBar", "Window"
     )
 
     foreach ($window in $topLevelWindows) {
         try {
-            $wRect = Get-BoundingRect $window
-            if ($wRect -eq $null -or $wRect.genislik -le 0 -or $wRect.yukseklik -le 0) { continue }
+            if ($window.Current.IsOffscreen) { continue }
             
-            $wName = $window.Current.Name
-            $wClass = $window.Current.ClassName
-            $parentName = if ([string]::IsNullOrWhiteSpace($wName)) { 
-                if ($wClass -eq "Shell_TrayWnd") { "Windows Taskbar ($wClass)" }
-                elseif ($wClass -eq "Progman" -or $wClass -eq "WorkerW") { "Windows Desktop ($wClass)" }
-                else { "Bilinmeyen Pencere ($wClass)" }
-            } else { $wName }
+            $wRect = Get-BoundingRect $window
+            if ($wRect -eq $null) { continue }
+            
+            $parentName = if ([string]::IsNullOrWhiteSpace($window.Current.Name)) { "Bilinmeyen Pencere" } else { $window.Current.Name }
             $color = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
             $pBorder = @($wRect.x, $wRect.y, ($wRect.x + $wRect.genislik), ($wRect.y + $wRect.yukseklik))
             
@@ -151,14 +83,14 @@ try {
             }
             
             # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            $treeWalker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
             
             # C# tarzi queue implementasyonu kullanarak BFS
             $queue = New-Object System.Collections.Queue
             $queue.Enqueue($window)
             $elementCount = 0
             
-            while ($queue.Count -gt 0 -and $elementCount -lt 8000) {
+            while ($queue.Count -gt 0 -and $elementCount -lt 4000) {
                 $node = $queue.Dequeue()
                 
                 # Cocuklari siraya ekle
