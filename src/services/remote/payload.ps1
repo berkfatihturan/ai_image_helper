@@ -153,14 +153,14 @@ try {
             }
             
             # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            $treeWalker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
             
             # C# tarzi queue implementasyonu kullanarak BFS
             $queue = New-Object System.Collections.Queue
             $queue.Enqueue($window)
             $elementCount = 0
             
-            while ($queue.Count -gt 0 -and $elementCount -lt 4000) {
+            while ($queue.Count -gt 0 -and $elementCount -lt 8000) {
                 $node = $queue.Dequeue()
                 
                 # Cocuklari siraya ekle
