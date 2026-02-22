@@ -113,7 +113,10 @@ class RemoteExtractor:
             # --- MAP REDUCE OCCLUSION (GORUNENLERI AYIKLAMA) SERVER SIDE ---
             # Python uzerinde calistigi icin cok spesifik ve hizlidir. Remote'u yormaz.
             flat_elements_all = []
-            for group in all_data:
+            for group_raw in all_data:
+                # PowerShell bazen Array icerisindeki hashtable'lari string (JSON) olarak dondurebiliyor
+                group = json.loads(group_raw) if isinstance(group_raw, str) else group_raw
+                
                 z = group.get("z_index", 0)
                 p_name = group.get("pencere", "")
                 c = group.get("renk", [0,0,0])
