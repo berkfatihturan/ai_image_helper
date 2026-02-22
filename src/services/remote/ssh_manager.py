@@ -25,22 +25,23 @@ class RemoteExtractor:
         stdin, stdout, stderr = self.ssh.exec_command("query session")
         output = stdout.read().decode('utf-8', errors='ignore')
         
-        # 'query session' ciktisinda > sembolu aktif olan (Masaustune bakan) oturumu isaret eder
-        # Ornek: >user1     1    Active 
-        for line in output.split('\n'):
-            if '>' in line:
-                parts = line.split()
-                if len(parts) >= 2:
-                    return parts[2] if parts[2].isdigit() else parts[1]
+        # 'query session' ciktisinda bizim aradigimiz sey 'Active' olan Session'dir. 
+        # Cogu zaman '>services' 0 ID'siyle veya ssh terminali '> ' isaretiyle gozukur. Bizim isimizi Active console gorur.
+        # Ornek satir: " console           koyun                     1  Active"
         
-        # Eger > bulunamazsa fallback olarak Console oturumu aranir:
+        # 1. Onceligimiz 'Active' state'ine sahip bir satir bulmak.
         for line in output.split('\n'):
-            if 'console' in line.lower() and 'Active' in line:
+            if 'Active' in line:
                 parts = line.split()
+                # Parts genelde: ['console', 'koyun', '1', 'Active'] seklindedir
                 if len(parts) >= 3:
-                     return parts[2] if parts[2].isdigit() else parts[1]
-        
-        return "1"  # Fallback
+                    # Index hatasindan kacinmak icin sayiya benzeyen kismi bulalim (1, 2, 3 vb.)
+                    for part in parts:
+                        if part.isdigit():
+                            return part
+                            
+        # 2. Eger Active olan yoksa (ekran kilitli vs) fallback olarak 1 dondur
+        return "1"
 
     def execute_remote_extraction(self) -> dict:
         """SFTP ile payload yukler, PsExec ile tetikler, JSONlari geri ceker."""
@@ -70,8 +71,6 @@ class RemoteExtractor:
             print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
             self.ssh.exec_command(psexec_cmd)
-            # Standart stderr ve stdout'u (PsExec'in terminal çıktısını) kayıt edelim ki patlarsa okuyabilelim
-            stdin_exec, stdout_exec, stderr_exec = self.ssh.exec_command(psexec_cmd)
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
             # Normal sartlarda bu 2-4 saniye surer.
@@ -80,6 +79,7 @@ class RemoteExtractor:
             # Sonuclari topla (SFTP ile Local'e Geri Al)
             json_all_remote = f"{temp_dir}\\ui_output_all.json"
             json_vis_remote = f"{temp_dir}\\ui_output_visible.json"
+            img_remote = f"{temp_dir}\\ui_map_visual.png"
             err_log_remote = f"{temp_dir}\\psexec_error.log"
             
             import json
@@ -92,9 +92,11 @@ class RemoteExtractor:
                 with sftp.file(json_all_remote, "r") as f:
                     all_data = json.load(f)
                     
+                # Resmi API sunucusuna indirelim
+                sftp.get(img_remote, "remote_map.png")
             except FileNotFoundError:
                  # Eger dosyalar yoksa, muhtemelen python scripti iceride patladi. Logu okumaya calis.
-                 error_details = "Python Hata Logu Yok."
+                 error_details = "Bilinmeyen Hata"
                  try:
                      with sftp.file(err_log_remote, "r") as f:
                          error_details = f.read().decode('utf-8')
@@ -102,24 +104,16 @@ class RemoteExtractor:
                  except:
                      pass
                      
-                 # Eger Python hata logu yoksa sorun muhtemelen direkt PsExec asamasindadir. SSH stderr'i cekelim
-                 ssh_error = stderr_exec.read().decode('utf-8', errors='ignore').strip()
-                 ssh_output = stdout_exec.read().decode('utf-8', errors='ignore').strip()
-                 
                  return {
                      "status": "error", 
-                     "message": f"Gorsel sonuc doyalari okunamadi.\n\n[Python Logu]:\n{error_details}\n\n[PsExec Terminal Çıktısı - STDERR]:\n{ssh_error}\n\n[STDOUT]:\n{ssh_output}"
+                     "message": f"Gorsel sonuc doyalari okunamadi. PsExec veya Python tamamlanamadi.\nHata Detayi:\n{error_details}"
                  }
 
             # İzi kaybettirme (Gizlilik Cleanup)
             sftp.remove(payload_remote_path)
-            try:
-                sftp.remove(json_all_remote)
-                sftp.remove(json_vis_remote)
-                # Resim dosyası yaratılmışsa sil (opsiyonel)
-                sftp.remove(f"{temp_dir}\\ui_map_visual.png")
-            except:
-                pass
+            sftp.remove(json_all_remote)
+            sftp.remove(json_vis_remote)
+            sftp.remove(img_remote)
             
             sftp.close()
             self.ssh.close()

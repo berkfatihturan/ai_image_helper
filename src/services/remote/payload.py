@@ -148,6 +148,57 @@ def extract_windows_ui():
 
     return grouped_ui_all, grouped_ui_visible
 
+def draw_ui_map(grouped_ui, output_path):
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageGrab
+    except ImportError:
+        return
+    try:
+         img = ImageGrab.grab()
+    except Exception:
+         import ctypes
+         user32 = ctypes.windll.user32
+         w, h = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+         img = Image.new('RGB', (w, h), color=(30, 30, 30))
+
+    draw = ImageDraw.Draw(img, "RGBA")
+    try:
+        font = ImageFont.truetype("arial.ttf", 12)
+        title_font = ImageFont.truetype("arialbd.ttf", 20)
+    except:
+        font = ImageFont.load_default()
+        title_font = ImageFont.load_default()
+
+    for group in grouped_ui:
+        p_name = group["pencere"]
+        p_color = tuple(group["renk"]) if isinstance(group["renk"], list) else group["renk"]
+        p_rect = group["kutu"]
+        
+        overlay_color = p_color + (40,)
+        border_color = p_color + (255,)
+        draw.rectangle([p_rect[0], p_rect[1], p_rect[2], p_rect[3]], fill=overlay_color, outline=border_color, width=3)
+        draw.text((p_rect[0] + 5, p_rect[1] + 5), p_name, fill=(255, 255, 255), font=title_font)
+        
+        for el in group["elmanlar"]:
+            ex, ey = el["koordinat"]["x"], el["koordinat"]["y"]
+            ew, eh = el["koordinat"]["genislik"], el["koordinat"]["yukseklik"]
+            shape_color = p_color + (200,)
+            center_x, center_y = ex + ew // 2, ey + eh // 2
+            ek = 4 
+            if el["tip"] == "Button":
+                draw.ellipse([center_x-ek-2, center_y-ek-2, center_x+ek+2, center_y+ek+2], fill=shape_color, outline="white")
+            elif el["tip"] == "Pane":
+                draw.rectangle([ex, ey, ex+ew, ey+eh], outline=shape_color, width=2)
+            elif el["tip"] == "Text":
+                draw.line((ex, ey+eh, ex+ew, ey+eh), fill=shape_color, width=2)
+            else:
+                draw.line((center_x - ek, center_y, center_x + ek, center_y), fill=shape_color, width=2)
+                draw.line((center_x, center_y - ek, center_x, center_y + ek), fill=shape_color, width=2)
+            if el["isim"]:
+                 draw.text((center_x + 6, center_y - 6), el["isim"][:15], fill=(255, 255, 255), font=font)
+
+    img.save(output_path)
+
 def main():
     import traceback
     out_dir = sys.argv[1] if len(sys.argv) > 1 else "C:\\Temp"
@@ -156,6 +207,9 @@ def main():
         
     try:
         all_elements, visible_elements = extract_windows_ui()
+        
+        if visible_elements:
+            draw_ui_map(visible_elements, os.path.join(out_dir, "ui_map_visual.png"))
         
         json_all = json.dumps(all_elements, ensure_ascii=False, indent=2)
         json_visible = json.dumps(visible_elements, ensure_ascii=False, indent=2)
