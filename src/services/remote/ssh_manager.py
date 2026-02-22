@@ -64,9 +64,9 @@ class RemoteExtractor:
             print(f"[{self.host}] Hedef Desktop Session ID: {session_id}")
             
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
-            # Not: Hedef makinede psexec C:\Windows\System32 altinda ya da Path uzerinde olmalidir.
+            # Not: C:\PSTools dizininin Path'te olmama ihtimaline karsi komut icinde gecici olarak Path'e ekliyoruz.
             # Alternatif olarak python kurulusu oldugu varsayilmaktadir.
-            psexec_cmd = f"psexec -i {session_id} -s -d -accepteula python {payload_remote_path} {temp_dir}"
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -d -accepteula python {payload_remote_path} {temp_dir}"'
             print(f"[{self.host}] PsExec Enjeksiyon komutu atiliyor...")
             
             self.ssh.exec_command(psexec_cmd)
