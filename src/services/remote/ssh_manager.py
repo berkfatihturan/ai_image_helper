@@ -87,10 +87,20 @@ class RemoteExtractor:
                     raw_bytes = f.read()
                     json_str = raw_bytes.decode('utf-8-sig') # Windows BOM karakterini temizler
                     all_data = json.loads(json_str)
-            except FileNotFoundError:
+            except (FileNotFoundError, json.JSONDecodeError) as parse_error:
+                 # Eger JSON okunamiyorsa, PowerShell icinde bir exception patlamis ve psexec_error.log yazilmistir
+                 err_log_remote = f"{temp_dir}\\psexec_error.log"
+                 powershell_error = "Log Bulunamadi"
+                 try:
+                     with sftp.file(err_log_remote, "rb") as f:
+                         powershell_error = f.read().decode('utf-8-sig', errors='ignore')
+                     sftp.remove(err_log_remote)
+                 except:
+                     pass
+
                  return {
                      "status": "error", 
-                     "message": f"PowerShell UI sonuclari uretemedi.\n\n--- PSEXEC STDERR ---\n{psexec_err}"
+                     "message": f"PowerShell UI taramasi sirasinda coktu.\n\n--- JSON PARSE HATASI ---\n{str(parse_error)}\n\n--- POWERSHELL EXCEPTION ---\n{powershell_error}\n\n--- PSEXEC STDERR ---\n{psexec_err}"
                  }
 
             # İzi kaybettirme (Gizlilik Cleanup)
