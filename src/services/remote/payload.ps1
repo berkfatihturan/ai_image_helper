@@ -137,11 +137,9 @@ try {
         }
     }
 
-    # PowerShell objelerini JSON formatina (.NET serializer ile UTF-8 guvenli cevir)
-    $jsonSerializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-    $jsonSerializer.MaxJsonLength = 2147483644
-
-    $allJson = $jsonSerializer.Serialize($allElementsOutput)
+    # PowerShell'in kendi ConvertTo-Json cmdlet'i ile (PSMethod sorununu by-pass eder)
+    # Eger veri buyukse Depth'i arttirmak hayat kurtarir
+    $allJson = $allElementsOutput | ConvertTo-Json -Depth 10 -Compress
 
     $outDir = if ($args.Count -gt 0) { $args[0] } else { "C:\Temp" }
     if (!(Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
