@@ -115,7 +115,15 @@ class RemoteExtractor:
             flat_elements_all = []
             for group_raw in all_data:
                 # PowerShell bazen Array icerisindeki hashtable'lari string (JSON) olarak dondurebiliyor
-                group = json.loads(group_raw) if isinstance(group_raw, str) else group_raw
+                if isinstance(group_raw, str):
+                    if not group_raw.strip():
+                        continue
+                    try:
+                        group = json.loads(group_raw)
+                    except json.JSONDecodeError:
+                        continue
+                else:
+                    group = group_raw
                 
                 z = group.get("z_index", 0)
                 p_name = group.get("pencere", "")
