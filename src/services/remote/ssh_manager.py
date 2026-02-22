@@ -65,7 +65,7 @@ class RemoteExtractor:
             print(f"[{self.host}] Hedef Desktop Session ID: {session_id}")
             
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -accepteula powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File {payload_remote_path} {temp_dir}"'
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File {payload_remote_path} {temp_dir}"'
             print(f"[{self.host}] PsExec PowerShell Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle

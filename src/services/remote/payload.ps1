@@ -60,11 +60,8 @@ try {
     Add-Type -MemberDefinition $signature -Name "Win32FindWindow" -Namespace Win32Functions -PassThru | Out-Null
     
     $topLevelWindows = New-Object System.Collections.ArrayList
-    foreach ($win in $topLevelWindowsCollection) {
-        [void]$topLevelWindows.Add($win)
-    }
     
-    # Gorev Cubugu HWND (C:\Windows\explorer.exe Shell_TrayWnd Class)
+    # Gorev Cubugu (Taskbar) EN USTTE OLMALI (Z-Index = 0)
     $taskbarHandle = [Win32Functions.Win32FindWindow]::FindWindow("Shell_TrayWnd", $null)
     if ($taskbarHandle -ne [IntPtr]::Zero) {
         try {
@@ -73,7 +70,14 @@ try {
         } catch {}
     }
     
-    # Masaustu Root HWND (Progman)
+    foreach ($win in $topLevelWindowsCollection) {
+        # Zaten ekledigimiz ozel pencereleri tekrar eklememek icin
+        $wClass = $win.Current.ClassName
+        if ($wClass -eq "Shell_TrayWnd" -or $wClass -eq "Progman" -or $wClass -eq "WorkerW") { continue }
+        [void]$topLevelWindows.Add($win)
+    }
+    
+    # Masaustu Root HWND (Progman) EN ALTTA OLMALI (Z-Index = Son)
     $desktopHandle = [Win32Functions.Win32FindWindow]::FindWindow("Progman", $null)
     if ($desktopHandle -ne [IntPtr]::Zero) {
         try {
@@ -116,27 +120,16 @@ try {
                 elmanlar = [System.Collections.ArrayList]::new()
             }
             
-            # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::RawViewWalker
+            # Elementleri toplamak icin native FindAll kullaniyoruz (Asiri hizli ve stabil)
+            $controlCondition = [System.Windows.Automation.Condition]::TrueCondition
+            $elements = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $controlCondition)
             
-            # C# tarzi queue implementasyonu kullanarak BFS
-            $queue = New-Object System.Collections.Queue
-            $queue.Enqueue($window)
             $elementCount = 0
+            $allNodes = @($window)
+            if ($elements -ne $null) { foreach ($e in $elements) { $allNodes += $e } }
             
-            while ($queue.Count -gt 0 -and $elementCount -lt 4000) {
-                $node = $queue.Dequeue()
-                
-                # Cocuklari siraya ekle
-                try {
-                    $child = $treeWalker.GetFirstChild($node)
-                    while ($child -ne $null) {
-                        $queue.Enqueue($child)
-                        $child = $treeWalker.GetNextSibling($child)
-                    }
-                } catch {}
-                
-                # Su anki dugumu isleyelim
+            foreach ($node in $allNodes) {
+                if ($elementCount -ge 4000) { break }
                 try {
                     $cRect = Get-BoundingRect $node
                     if ($cRect -eq $null -or $cRect.genislik -le 0 -or $cRect.yukseklik -le 0) { continue }
