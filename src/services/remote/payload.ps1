@@ -46,8 +46,24 @@ try {
         return "Unknown"
     }
 
-    # Sadece Window'lari degil, Taskbar (Gorev Cubugu) ve Masaustu (Desktop) gibi
-    # sistem bilesenlerini de yakalamak icin filtreyi kaldiriyoruz (cunku onlar 'Pane' sinifindandir)
+    Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Text;
+    public class User32 {
+        [DllImport("user32.dll", SetLastError = true, CharSet=CharSet.Auto)]
+        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    }
+"@
+
+    function Get-NativeClassName ($hwnd) {
+        if ($hwnd -eq [IntPtr]::Zero) { return "" }
+        $sb = New-Object System.Text.StringBuilder(256)
+        $res = [User32]::GetClassName($hwnd, $sb, $sb.Capacity)
+        if ($res -gt 0) { return $sb.ToString() }
+        return ""
+    }
+
     $trueCondition = [System.Windows.Automation.Condition]::TrueCondition
     $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $trueCondition)
 
@@ -65,10 +81,34 @@ try {
         try {
             if ($window.Current.IsOffscreen) { continue }
             
+            $cTypeString = Get-ControlTypeString $window.Current.ControlType.Id
+            
+            # Sadece Window olanlari, Taskbar'i ve Desktop'u kabul edelim. 
+            # Diger abuk subuk gorunmez Pane'leri reddedelim.
+            $hwnd = [IntPtr]$window.Current.NativeWindowHandle
+            $className = Get-NativeClassName $hwnd
+            
+            if ($cTypeString -eq "Pane") {
+                # Eger bir Pane ise, sadece Taskbar veya Desktop ise kabul et
+                $validPanes = @("Shell_TrayWnd", "Progman", "WorkerW")
+                if ($validPanes -notcontains $className) {
+                    continue
+                }
+            } elseif ($cTypeString -ne "Window") {
+                # Pane de degil, Window da degilse (ornek: ToolTip) ana kapsayici olarak reddet
+                continue
+            }
+            
             $wRect = Get-BoundingRect $window
             if ($wRect -eq $null) { continue }
             
-            $parentName = if ([string]::IsNullOrWhiteSpace($window.Current.Name)) { "Bilinmeyen Pencere" } else { $window.Current.Name }
+            $parentName = $window.Current.Name
+            if ([string]::IsNullOrWhiteSpace($parentName)) { 
+                if ($className -eq "Shell_TrayWnd") { $parentName = "Windows Taskbar" }
+                elseif ($className -eq "Progman" -or $className -eq "WorkerW") { $parentName = "Windows Desktop" }
+                else { $parentName = "Bilinmeyen Pencere" }
+            }
+            
             $color = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
             $pBorder = @($wRect.x, $wRect.y, ($wRect.x + $wRect.genislik), ($wRect.y + $wRect.yukseklik))
             
