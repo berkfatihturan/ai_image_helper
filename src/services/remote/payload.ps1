@@ -12,27 +12,31 @@ Add-Type -AssemblyName System.Web.Extensions
 Start-Sleep -Milliseconds 200
 
 # --- USER32 (EnumWindows + FindWindowEx + GetClassName) ---
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
+try {
+  Add-Type @"
+  using System;
+  using System.Runtime.InteropServices;
+  using System.Text;
 
-public class User32 {
-  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  public class User32 {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
-  [DllImport("user32.dll")]
-  public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
 
-  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-  public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+    public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
-  [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-  public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string className, string windowName);
+    [DllImport("user32.dll", SetLastError=true, CharSet=CharSet.Auto)]
+    public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string className, string windowName);
 
-  [DllImport("user32.dll")]
-  public static extern bool IsWindowVisible(IntPtr hWnd);
-}
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+  }
 "@
+} catch {
+  # Zaten eklendiyse (ayni PowerShell oturumu tekrar tetiklendiyse) gormezden gel
+}
 
 function Get-NativeClassName ($hwnd) {
   if ($hwnd -eq [IntPtr]::Zero) { return "" }
