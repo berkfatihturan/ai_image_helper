@@ -22,6 +22,16 @@ try {
         exit 1
     }
 
+    Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    using System.Text;
+    public class User32 {
+        [DllImport("user32.dll", SetLastError = true, CharSet=CharSet.Auto)]
+        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    }
+"@
+
     # --- YARDIMCI FOKSIYONLAR ---
     function Get-BoundingRect ($element) {
         try {
@@ -46,16 +56,6 @@ try {
         return "Unknown"
     }
 
-    Add-Type @"
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Text;
-    public class User32 {
-        [DllImport("user32.dll", SetLastError = true, CharSet=CharSet.Auto)]
-        public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    }
-"@
-
     function Get-NativeClassName ($hwnd) {
         if ($hwnd -eq [IntPtr]::Zero) { return "" }
         $sb = New-Object System.Text.StringBuilder(256)
@@ -64,44 +64,32 @@ try {
         return ""
     }
 
-    # Z-Order hiyerarsisi (en ust pencere -> en alt zemin) sirasi korumak icin ControlViewWalker kullanilir.
-    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
-    $child = $walker.GetFirstChild($rootElement)
-    $topLevelWindows = @()
-    while ($child -ne $null) {
-        $topLevelWindows += $child
-        $child = $walker.GetNextSibling($child)
-    }
+    # Sadece Window'lari degil, Taskbar (Gorev Cubugu) ve Masaustu (Desktop) gibi
+    # sistem bilesenlerini de yakalamak icin filtreyi kaldiriyoruz
+    $trueCondition = [System.Windows.Automation.Condition]::TrueCondition
+    $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $trueCondition)
 
     $allElementsOutput = @()
-    $currentZIndex = 0
+    $currentZIndex = 10
 
-    $meaningfulTypes = @(
-        "Button", "Edit", "Hyperlink", "MenuItem", "Text", "CheckBox",
-        "ComboBox", "ListItem", "TabItem", "Document", "Image", "Pane",
-        "TreeItem", "DataItem", "Custom", "Group", "SplitButton", 
-        "StatusBar", "Tab", "Table", "TitleBar", "Window"
-    )
+    # UI elementleri icin detayli ControlType listesi
+    $validChildTypes = @("Button", "CheckBox", "ComboBox", "Document", "Edit", "Hyperlink", "Image", "ListItem", "MenuItem", "RadioButton", "Slider", "Spinner", "TabItem", "Text", "TreeItem", "Thumb", "HeaderItem", "Pane", "Group", "Custom", "List")
 
     foreach ($window in $topLevelWindows) {
         try {
             if ($window.Current.IsOffscreen) { continue }
             
             $cTypeString = Get-ControlTypeString $window.Current.ControlType.Id
-            
-            # Sadece Window olanlari, Taskbar'i ve Desktop'u kabul edelim. 
-            # Diger abuk subuk gorunmez Pane'leri reddedelim.
             $hwnd = [IntPtr]$window.Current.NativeWindowHandle
             $className = Get-NativeClassName $hwnd
             
+            # Sadece Window olanlari, Taskbar'i ve Desktop'u kabul edelim. 
             if ($cTypeString -eq "Pane") {
-                # Eger bir Pane ise, sadece Taskbar veya Desktop ise kabul et
                 $validPanes = @("Shell_TrayWnd", "Progman", "WorkerW")
                 if ($validPanes -notcontains $className) {
                     continue
                 }
             } elseif ($cTypeString -ne "Window") {
-                # Pane de degil, Window da degilse (ornek: ToolTip) ana kapsayici olarak reddet
                 continue
             }
             
@@ -110,10 +98,14 @@ try {
             
             $parentName = $window.Current.Name
             $isDesktop = ($className -eq "Progman" -or $className -eq "WorkerW")
+            $isTaskbar = ($className -eq "Shell_TrayWnd")
+            
             $myZIndex = $currentZIndex
+            if ($isDesktop) { $myZIndex = 99990 }
+            elseif ($isTaskbar) { $myZIndex = 1 }
             
             if ([string]::IsNullOrWhiteSpace($parentName)) { 
-                if ($className -eq "Shell_TrayWnd") { $parentName = "Windows Taskbar" }
+                if ($isTaskbar) { $parentName = "Windows Taskbar" }
                 elseif ($isDesktop) { $parentName = "Windows Desktop" }
                 else { $parentName = "Bilinmeyen Pencere" }
             }
@@ -129,46 +121,30 @@ try {
                 elmanlar = [System.Collections.ArrayList]::new()
             }
             
-            # Elementleri toplamak icin agaci gezelim
-            $treeWalker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+            # Alt elementleri BFS/TreeWalker yerine tek seferde Get-Descendants ile al (Klasor listelerini kaybetmemek icin)
+            $descendants = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $trueCondition)
             
-            # C# tarzi queue implementasyonu kullanarak BFS
-            $queue = New-Object System.Collections.Queue
-            $queue.Enqueue($window)
             $elementCount = 0
-            
-            while ($queue.Count -gt 0 -and $elementCount -lt 4000) {
-                $node = $queue.Dequeue()
-                
-                # Cocuklari siraya ekle
-                try {
-                    $child = $treeWalker.GetFirstChild($node)
-                    while ($child -ne $null) {
-                        $queue.Enqueue($child)
-                        $child = $treeWalker.GetNextSibling($child)
-                    }
-                } catch {}
-                
-                # Su anki dugumu isleyelim
+            foreach ($node in $descendants) {
+                if ($elementCount -ge 5000) { break }
                 try {
                     $cRect = Get-BoundingRect $node
-                    # Coken UI ve cok kucuk sacma elementleri engelle
                     if ($cRect -eq $null -or $cRect.genislik -le 0 -or $cRect.yukseklik -le 0) { continue }
                     
-                    $cType = Get-ControlTypeString $node.Current.ControlType.Id
+                    $nodeType = Get-ControlTypeString $node.Current.ControlType.Id
+                    if ($validChildTypes -notcontains $nodeType) { continue }
+                    
                     $cName = if ([string]::IsNullOrWhiteSpace($node.Current.Name)) { "" } else { $node.Current.Name.Trim() }
                     
-                    # Temel filtresiz izleme: sadece gozukmeyen hayalet pencerelerin devasa zeminlerini ele (ornegin bos Group/Pane ve devasa)
-                    # Masaustu ikonlarini ve gorev cubugu dugmelerini ASLA KESMEYIZ.
-                    if ($cName -eq "" -and ($cType -eq "Pane" -or $cType -eq "Group" -or $cType -eq "Custom") -and ($cRect.genislik -ge ($wRect.genislik - 10) -and $cRect.yukseklik -ge ($wRect.yukseklik - 10))) {
-                        continue
-                    }
+                    # Saydam, isimsiz arkaplan katmanlarini (Group, Pane) listeye eklemeyelim, 
+                    # ama icerisindeki Butonlar/Ikonlar haritaya dahil edilsin diye onlari engellemiyoruz (FindAll-Descendants sayesinde).
+                    if ($cName -eq "" -and ($nodeType -eq "Pane" -or $nodeType -eq "Group" -or $nodeType -eq "Custom" -or $nodeType -eq "List")) { continue }
                     
                     $centerX = [math]::Round($cRect.x + ($cRect.genislik / 2))
                     $centerY = [math]::Round($cRect.y + ($cRect.yukseklik / 2))
                     
                     $elData = @{
-                        tip = $cType
+                        tip = $nodeType
                         isim = $cName
                         koordinat = $cRect
                         merkez_koordinat = @{
@@ -184,14 +160,13 @@ try {
             
             $windowGroup.elmanlar = $windowGroup.elmanlar.ToArray()
             $allElementsOutput += $windowGroup
-            $currentZIndex++
+            if (-not $isDesktop -and -not $isTaskbar) { $currentZIndex += 10 }
         } catch {
             # Pencere okuma hatasi
         }
     }
 
     # PowerShell'in kendi ConvertTo-Json cmdlet'i ile (PSMethod sorununu by-pass eder)
-    # Eger veri buyukse Depth'i arttirmak hayat kurtarir
     $allJson = $allElementsOutput | ConvertTo-Json -Depth 10 -Compress
 
     $outDir = if ($args.Count -gt 0) { $args[0] } else { "C:\Temp" }
