@@ -31,8 +31,8 @@ app = get_application()
 if __name__ == "__main__":
     print("-" * 50)
     print(f"🚀 {settings.PROJECT_NAME} Başlatılıyor...")
-    print(f"🌐 Sunucu Adresi: http://localhost:8000")
-    print(f"📄 Swagger API Dokümantasyonu: http://localhost:8000/docs")
+    print(f"🌐 Sunucu Adresi: http://localhost:8003")
+    print(f"📄 Swagger API Dokümantasyonu: http://localhost:8003/docs")
     print("-" * 50)
     
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8003, reload=True)
