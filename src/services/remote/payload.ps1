@@ -64,8 +64,14 @@ try {
         return ""
     }
 
-    $trueCondition = [System.Windows.Automation.Condition]::TrueCondition
-    $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $trueCondition)
+    # Z-Order hiyerarsisi (en ust pencere -> en alt zemin) sirasi korumak icin ControlViewWalker kullanilir.
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $child = $walker.GetFirstChild($rootElement)
+    $topLevelWindows = @()
+    while ($child -ne $null) {
+        $topLevelWindows += $child
+        $child = $walker.GetNextSibling($child)
+    }
 
     $allElementsOutput = @()
     $currentZIndex = 0
@@ -103,9 +109,12 @@ try {
             if ($wRect -eq $null) { continue }
             
             $parentName = $window.Current.Name
+            $isDesktop = ($className -eq "Progman" -or $className -eq "WorkerW")
+            $myZIndex = $currentZIndex
+            
             if ([string]::IsNullOrWhiteSpace($parentName)) { 
                 if ($className -eq "Shell_TrayWnd") { $parentName = "Windows Taskbar" }
-                elseif ($className -eq "Progman" -or $className -eq "WorkerW") { $parentName = "Windows Desktop" }
+                elseif ($isDesktop) { $parentName = "Windows Desktop" }
                 else { $parentName = "Bilinmeyen Pencere" }
             }
             
@@ -114,7 +123,7 @@ try {
             
             $windowGroup = @{
                 pencere = $parentName
-                z_index = $currentZIndex
+                z_index = $myZIndex
                 renk = $color
                 kutu = $pBorder
                 elmanlar = [System.Collections.ArrayList]::new()
@@ -143,22 +152,24 @@ try {
                 # Su anki dugumu isleyelim
                 try {
                     $cRect = Get-BoundingRect $node
+                    # Coken UI ve cok kucuk sacma elementleri engelle
                     if ($cRect -eq $null -or $cRect.genislik -le 0 -or $cRect.yukseklik -le 0) { continue }
                     
                     $cType = Get-ControlTypeString $node.Current.ControlType.Id
-                    $cName = $node.Current.Name
+                    $cName = if ([string]::IsNullOrWhiteSpace($node.Current.Name)) { "" } else { $node.Current.Name.Trim() }
                     
-                    $isMeaningful = $meaningfulTypes -contains $cType
-                    if ([string]::IsNullOrWhiteSpace($cName) -and -not $isMeaningful) { continue }
-                    
-                    $isim = if ([string]::IsNullOrWhiteSpace($cName)) { "" } else { $cName.Trim() }
+                    # Temel filtresiz izleme: sadece gozukmeyen hayalet pencerelerin devasa zeminlerini ele (ornegin bos Group/Pane ve devasa)
+                    # Masaustu ikonlarini ve gorev cubugu dugmelerini ASLA KESMEYIZ.
+                    if ($cName -eq "" -and ($cType -eq "Pane" -or $cType -eq "Group" -or $cType -eq "Custom") -and ($cRect.genislik -ge ($wRect.genislik - 10) -and $cRect.yukseklik -ge ($wRect.yukseklik - 10))) {
+                        continue
+                    }
                     
                     $centerX = [math]::Round($cRect.x + ($cRect.genislik / 2))
                     $centerY = [math]::Round($cRect.y + ($cRect.yukseklik / 2))
                     
                     $elData = @{
                         tip = $cType
-                        isim = $isim
+                        isim = $cName
                         koordinat = $cRect
                         merkez_koordinat = @{
                             x = $centerX
