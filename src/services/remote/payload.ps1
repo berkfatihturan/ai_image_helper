@@ -133,7 +133,10 @@ function Read-DesktopIcons {
       if ($r.genislik -lt 4 -or $r.yukseklik -lt 4) { continue }
 
       $name = ""
-      try { $name = ($it.Current.Name ?? "").Trim() } catch { $name = "" }
+      try {
+        $rawName = $it.Current.Name
+        if ($null -ne $rawName) { $name = $rawName.Trim() }
+      } catch { }
 
       $centerX = [math]::Round($r.x + ($r.genislik/2))
       $centerY = [math]::Round($r.y + ($r.yukseklik/2))
