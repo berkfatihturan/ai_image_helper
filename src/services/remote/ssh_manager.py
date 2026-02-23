@@ -45,9 +45,9 @@ class RemoteExtractor:
 
     def execute_remote_extraction(self) -> dict:
         """SFTP ile PowerShell payload yukler, PsExec ile tetikler, JSONlari geri ceker."""
-        payload_local_path = os.path.join(os.path.dirname(__file__), "payload.ps1")
+        payload_local_path = os.path.join(os.path.dirname(__file__), "payload.py")
         temp_dir = "C:\\Temp"
-        payload_remote_path = f"{temp_dir}\\ui_scanner.ps1"
+        payload_remote_path = f"{temp_dir}\\ui_scanner.py"
         
         try:
             self.connect()
@@ -65,7 +65,7 @@ class RemoteExtractor:
             print(f"[{self.host}] Hedef Desktop Session ID: {session_id}")
             
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File {payload_remote_path} {temp_dir}"'
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula python {payload_remote_path}"'
             print(f"[{self.host}] PsExec PowerShell Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
