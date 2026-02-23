@@ -11,8 +11,9 @@ Add-Type -AssemblyName System.Web.Extensions
 
 Start-Sleep -Milliseconds 200
 
+try {
 # --- USER32 (EnumWindows + FindWindowEx + GetClassName) ---
-if (-not ([System.Management.Automation.PSTypeName]'User32').Type) {
+if (-not ('User32' -as [type])) {
   Add-Type @"
   using System;
   using System.Runtime.InteropServices;
@@ -151,7 +152,6 @@ function Read-DesktopIcons {
 }
 
 # ---------------- MAIN ----------------
-try {
   $outDir = if ($args.Count -gt 0) { $args[0] } else { "C:\Temp" }
   if (!(Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
 
