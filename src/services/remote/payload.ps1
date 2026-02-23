@@ -12,7 +12,7 @@ Add-Type -AssemblyName System.Web.Extensions
 Start-Sleep -Milliseconds 200
 
 # --- USER32 (EnumWindows + FindWindowEx + GetClassName) ---
-try {
+if (-not ([System.Management.Automation.PSTypeName]'User32').Type) {
   Add-Type @"
   using System;
   using System.Runtime.InteropServices;
@@ -34,8 +34,6 @@ try {
     public static extern bool IsWindowVisible(IntPtr hWnd);
   }
 "@
-} catch {
-  # Zaten eklendiyse (ayni PowerShell oturumu tekrar tetiklendiyse) gormezden gel
 }
 
 function Get-NativeClassName ($hwnd) {
