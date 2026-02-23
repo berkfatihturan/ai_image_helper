@@ -71,6 +71,11 @@ class RemoteExtractor:
             if "INFO:" in python_exe or "Could not find" in python_exe:
                 python_exe = "python"
                 
+            if python_exe.lower().endswith("python.exe"):
+                python_exe = python_exe[:-4] + "w.exe"
+            elif python_exe == "python":
+                python_exe = "pythonw"
+                
             print(f"[{self.host}] Python Calistiricisi: {python_exe}")
             
             # Paramiko SSH zaten cmd.exe baglami acar, cmd.exe /c ile tekrar sarmaya gerek yok
