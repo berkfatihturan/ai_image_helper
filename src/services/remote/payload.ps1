@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-  UIA scanner + Desktop/Taskbar + DESKTOP ICONS (kesin çözüm)
+  UIA scanner + Desktop/Taskbar + DESKTOP ICONS Unified (Kesin Cozum)
 .NOTES
   Desktop ikonlarını görmek için script kullanıcı oturumunda (interactive) çalışmalı.
-  SYSTEM/service/session0 -> ikonlar görünmez.
 #>
 
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName System.Web.Extensions
 
 Start-Sleep -Milliseconds 200
 
@@ -88,7 +88,6 @@ function Get-DesktopListViewHwnd {
       $script:found = $listView
       return $false
     }
-
     return $true
   }
 
@@ -154,14 +153,16 @@ try {
   $outDir = if ($args.Count -gt 0) { $args[0] } else { "C:\Temp" }
   if (!(Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir | Out-Null }
 
-  # Desktop container çıktısı (Program Manager vs) için basit kayıt
+  $allElementsOutput = @()
+
+  # A) MASAUSTU (DESKTOP ICONS) ISLEMI (USER SCRIPT)
   $desktopRect = Get-PrimaryScreenRect
-
   $desktopIcons = Read-DesktopIcons
-
+  
   $desktopOut = @{
     pencere = "Windows Desktop"
     z_index = 99990
+    renk = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
     kutu = @($desktopRect.x, $desktopRect.y, ($desktopRect.x + $desktopRect.genislik), ($desktopRect.y + $desktopRect.yukseklik))
     desktop_listview = @{
       ok = $desktopIcons.ok
@@ -170,9 +171,93 @@ try {
     }
     elmanlar = $desktopIcons.icons
   }
+  $allElementsOutput += $desktopOut
 
-  $json = $desktopOut | ConvertTo-Json -Depth 10 -Compress
-  [System.IO.File]::WriteAllText((Join-Path $outDir "desktop_icons.json"), $json, [System.Text.Encoding]::UTF8)
+  # B) TASKBAR & DIGER PENCERELER (UIA Root Taramasi)
+  $rootElement = [System.Windows.Automation.AutomationElement]::RootElement
+  if ($rootElement -ne $null) {
+      $trueCondition = [System.Windows.Automation.Condition]::TrueCondition
+      $topLevelWindows = $rootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $trueCondition)
+      
+      $currentZIndex = 10
+      $validChildTypes = @("Button", "CheckBox", "ComboBox", "Document", "Edit", "Hyperlink", "Image", "ListItem", "MenuItem", "RadioButton", "Slider", "Spinner", "TabItem", "Text", "TreeItem", "Thumb", "HeaderItem", "Pane", "Group", "Custom", "List")
+
+      foreach ($window in $topLevelWindows) {
+          try {
+              if ($window.Current.IsOffscreen) { continue }
+              
+              $hwnd = [IntPtr]$window.Current.NativeWindowHandle
+              $className = Get-NativeClassName $hwnd
+              
+              # masaustunu zaten ozel olarak (A)'da ekledik, bunlari atla
+              if ($className -eq "Progman" -or $className -eq "WorkerW") { continue }
+              
+              $cTypeString = Get-ControlTypeString $window.Current.ControlType.Id
+              
+              # Eger Pane ise, sadece Taskbar'i al
+              if ($cTypeString -eq "Pane") {
+                  if ($className -ne "Shell_TrayWnd") { continue }
+              } elseif ($cTypeString -ne "Window") {
+                  continue
+              }
+              
+              $wRect = Get-BoundingRect $window
+              if ($wRect -eq $null) { continue }
+              
+              $parentName = if ([string]::IsNullOrWhiteSpace($window.Current.Name)) { "" } else { $window.Current.Name }
+              $isTaskbar = ($className -eq "Shell_TrayWnd")
+              $myZIndex = if ($isTaskbar) { 1 } else { $currentZIndex }
+              
+              if ($parentName -eq "") { 
+                  $parentName = if ($isTaskbar) { "Windows Taskbar" } else { "Bilinmeyen Pencere" }
+              }
+              
+              $windowGroup = @{
+                  pencere = $parentName
+                  z_index = $myZIndex
+                  renk = @( (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250), (Get-Random -Minimum 50 -Maximum 250) )
+                  kutu = @($wRect.x, $wRect.y, ($wRect.x + $wRect.genislik), ($wRect.y + $wRect.yukseklik))
+                  elmanlar = [System.Collections.ArrayList]::new()
+              }
+              
+              # Pencere altindakileri topla
+              $descendants = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, $trueCondition)
+              $elementCount = 0
+              foreach ($node in $descendants) {
+                  if ($elementCount -ge 5000) { break }
+                  try {
+                      $cRect = Get-BoundingRect $node
+                      if ($cRect -eq $null -or $cRect.genislik -le 0 -or $cRect.yukseklik -le 0) { continue }
+                      
+                      $nodeType = Get-ControlTypeString $node.Current.ControlType.Id
+                      if ($validChildTypes -notcontains $nodeType) { continue }
+                      
+                      $cName = if ([string]::IsNullOrWhiteSpace($node.Current.Name)) { "" } else { $node.Current.Name.Trim() }
+                      if ($cName -eq "" -and ($nodeType -eq "Pane" -or $nodeType -eq "Group" -or $nodeType -eq "Custom" -or $nodeType -eq "List")) { continue }
+                      
+                      $centerX = [math]::Round($cRect.x + ($cRect.genislik / 2))
+                      $centerY = [math]::Round($cRect.y + ($cRect.yukseklik / 2))
+                      
+                      [void]$windowGroup.elmanlar.Add(@{
+                          tip = $nodeType
+                          isim = $cName
+                          koordinat = $cRect
+                          merkez_koordinat = @{ x=$centerX; y=$centerY }
+                      })
+                      $elementCount++
+                  } catch {}
+              }
+              
+              $windowGroup.elmanlar = $windowGroup.elmanlar.ToArray()
+              $allElementsOutput += $windowGroup
+              if (-not $isTaskbar) { $currentZIndex += 10 }
+              
+          } catch {}
+      }
+  }
+
+  $json = $allElementsOutput | ConvertTo-Json -Depth 10 -Compress
+  [System.IO.File]::WriteAllText((Join-Path $outDir "ui_output_all.json"), $json, [System.Text.Encoding]::UTF8)
 
 } catch {
   $outDir = if ($args.Count -gt 0) { $args[0] } else { "C:\Temp" }
